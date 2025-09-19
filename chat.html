@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AYURAKSHAK - Chat</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background-color: #ECE5DD; font-family: Arial, sans-serif; margin: 0; padding-bottom: 80px; }
+    .chat-header { background-color: #075E54; color: white; padding: 15px; display: flex; align-items: center; }
+    .chat-header img { border-radius: 50%; width: 48px; height: 48px; margin-right: 12px; }
+    .chat-box { height: 70vh; overflow-y: auto; padding: 15px; background: #ECE5DD; }
+    .bubble-user { text-align: right; margin: 8px 0; }
+    .bubble-user span { background: #DCF8C6; padding: 10px; border-radius: 12px; display: inline-block; max-width: 75%; white-space: pre-wrap; }
+    .bubble-bot { text-align: left; margin: 8px 0; }
+    .bubble-bot span { background: #fff; padding: 10px; border-radius: 12px; display: inline-block; max-width: 75%; white-space: pre-wrap; }
+    .input-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; display: flex; align-items: center; padding: 10px; gap: 8px; }
+    .input-bar input[type="text"] { flex: 1; border: 1px solid #ddd; border-radius: 20px; padding: 10px 14px; }
+    .input-bar button { background: none; border: none; font-size: 20px; }
+  </style>
+</head>
+<body>
+  <div class="chat-header">
+    <img src="{{ url_for('static', filename='avatar.png') }}" alt="DP" onerror="this.src='https://via.placeholder.com/48'">
+    <div>
+      <h5 style="margin:0">AYURAKSHAK</h5>
+      <small>Official Health Assistant</small>
+    </div>
+  </div>
+
+  <div id="chat-box" class="chat-box"></div>
+
+  <div class="input-bar">
+    <input type="text" id="user-input" placeholder="Type a message...">
+    <button title="Attach" onclick="openFileUpload()">📎</button>
+    <button title="Share location" onclick="getLocation()">📍</button>
+    <button title="Send" onclick="sendMessage()">➤</button>
+    <input type="file" id="fileInput" style="display:none" onchange="handleFileUpload(event)">
+  </div>
+
+  <script>
+    const lang_code = "{{lang_code}}";
+    const helpline = "{{helpline}}";
+
+    function appendMessage(sender, text) {
+      const chatBox = document.getElementById("chat-box");
+      const div = document.createElement("div");
+      div.className = sender === "user" ? "bubble-user" : "bubble-bot";
+      const span = document.createElement("span");
+      span.textContent = text;
+      div.appendChild(span);
+      chatBox.appendChild(div);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    async function sendMessage() {
+      const input = document.getElementById("user-input");
+      const text = input.value.trim();
+      if (!text) return;
+      appendMessage("user", text);
+      input.value = "";
+
+      try {
+        const res = await fetch("/send_message", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: text, lang_code: lang_code })
+        });
+        const data = await res.json();
+        appendMessage("bot", data.reply);
+      } catch (err) {
+        appendMessage("bot", "⚠ Network error. " + "No network detected. Meanwhile: drink water, rest, and call Govt. Health Helpline: 104 (India)");
+      }
+    }
+
+    function openFileUpload() {
+      document.getElementById("fileInput").click();
+    }
+
+    async function handleFileUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      appendMessage("user", `📎 Uploaded file: ${file.name}`);
+
+      const form = new FormData();
+      form.append("file", file);
+      form.append("lang_code", lang_code);
+
+      try {
+        const res = await fetch("/upload_file", {
+          method: "POST",
+          body: form
+        });
+        const data = await res.json();
+        appendMessage("bot", data.reply);
+      } catch (err) {
+        appendMessage("bot", "⚠ Could not upload file. " + "No network detected. Meanwhile: drink water, rest, and call Govt. Health Helpline: 104 (India)");
+      }
+    }
+
+    function getLocation() {
+      if (!navigator.geolocation) {
+        appendMessage("bot", "⚠ Location not supported on this device.");
+        return;
+      }
+      appendMessage("user", "📍 Sharing location…");
+      navigator.geolocation.getCurrentPosition((pos) => {
+        const coords = `Latitude: ${pos.coords.latitude}, Longitude: ${pos.coords.longitude}`;
+        appendMessage("bot", `I received your location:\n${coords}\nNearest hospital: https://www.google.com/maps/search/hospital+near+me\n${"{{DISCLAIMER}}"}`);
+        // If you want to send location to server, implement fetch to save it.
+      }, (err) => {
+        appendMessage("bot", "⚠ Unable to fetch location.");
+      });
+    }
+
+    // On load: show offline-safe cached message if navigator offline
+    window.addEventListener('load', () => {
+      if (!navigator.onLine) {
+        appendMessage("bot", "⚠ No network detected. Meanwhile: drink water, rest, and call Govt. Health Helpline: 104 (India)");
+      }
+    });
+    window.addEventListener('offline', () => {
+      appendMessage("bot", "⚠ No network detected. Meanwhile: drink water, rest, and call Govt. Health Helpline: 104 (India)");
+    });
+  </script>
+</body>
+</html>
